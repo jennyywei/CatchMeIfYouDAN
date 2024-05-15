@@ -1,3 +1,5 @@
 **/__pycache__
-/datasets/*
-/raw_datasets/*
+/datasets/*/
+/raw_datasets/*.csv
+/raw_datasets/*.json
+/raw_datasets/*.jsonl
