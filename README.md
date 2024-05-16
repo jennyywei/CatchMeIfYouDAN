@@ -25,6 +25,8 @@ The remaining 3 datasets must be downloaded and added to the `raw_datasets` dire
 Then, run `python process_datasets.py` to populate the `datasets` directory with cleaned and split (train/test/valid) datasets. Since `process_datasets.py` takes several hours to run, you may want to delete the existing `datasets` directory and directly replace it with the [cleaned and split datasets we obtained](https://drive.google.com/file/d/1zIETkJ7Y1iIQ9bKcIgceaFSlX0vX4gPr/view?usp=sharing) instead.
 
 ### Dataset Combination
-Although this project uses 8 datasets, we will combine performance metrics across several datasets according to the following framework:
+Although this project uses 8 datasets, we will combine performance metrics across several datasets according to the following categories:
 
-[insert framework later]
+* **PROMPT INJECTIONS**: Deepset, HackAPrompt
+* **JAILBREAK ATTEMPTS**: Do Anything Now, ProtectAI
+* **PASSWORD EXTRACTION** (specific application of prompt injections and jailbreaking): Lakera Gandalf password extraction summarization, Lakera Gandalf password extraction ignore instructions, Lakera Mosscap password extraction, TensorTrust
