@@ -27,6 +27,7 @@ Then, run `python process_datasets.py` to populate the `datasets` directory with
 ### Dataset Combination
 Although this project uses 8 datasets, we will combine performance metrics across several datasets according to the following categories:
 
-* **PROMPT INJECTIONS**: Deepset, HackAPrompt
+* **PROMPT INJECTION CLASSIFICATION**: Deepset (dataset includes malicious and innocuous prompts)
+* **PROMPT INJECTION DETECTION**: HackAPrompt (dataset only includes malicious prompts)
 * **JAILBREAK ATTEMPTS**: Do Anything Now, ProtectAI
 * **PASSWORD EXTRACTION** (specific application of prompt injections and jailbreaking): Lakera Gandalf password extraction summarization, Lakera Gandalf password extraction ignore instructions, Lakera Mosscap password extraction, TensorTrust
