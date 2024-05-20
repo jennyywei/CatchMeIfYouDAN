@@ -37,6 +37,16 @@ llm = pipeline("text-generation", model=model, tokenizer=tokenizer)
 ############################## LOADING FILES AND TOOLS ##############################
 
 def load_split(split):
+    """
+    Loads the dataset split (train, validation, or test) for each category and subcategory defined in dataset_cats.
+
+    Args:
+        split (str): The dataset split to load. Should be one of "train", "validation", or "test".
+
+    Returns:
+        dict: A dictionary containing the datasets for each category.
+              Each category contains a list of DataFrames corresponding to its subcategories.
+    """
     if (split != "train" and split != "validation" and split != "test"):
         print("Tried to load an invalid split")
         return
@@ -55,6 +65,16 @@ def load_split(split):
 
 
 def load_prompts(prompt_paths):
+    """
+    Loads prompts from the specified file paths.
+
+    Args:
+        prompt_paths (list): List of file paths to the prompt files.
+
+    Returns:
+        dict: A dictionary containing the prompts, with keys as "zs", "os", and "fs" representing 
+              zero shot, one shot, and few shot prompts respectively.
+    """
     prompts = {}
     for name, file_path in zip(["zs", "os", "fs"], prompt_paths):
         with open(file_path, "r") as file:
@@ -63,6 +83,12 @@ def load_prompts(prompt_paths):
 
 
 def generate_spotlighting_combos():
+    """
+    Generates all possible combinations of spotlighting methods.
+
+    Returns:
+        list: A list of tuples, each containing a combination of spotlighting methods.
+    """
     methods = ["dl", "dm", "ec"] # delimiting, datamarking, encoding
     combs = []
     for i in range(1, len(methods) + 1):
