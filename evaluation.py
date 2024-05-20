@@ -2,6 +2,8 @@ from transformers import GPT2LMHeadModel, GPT2Tokenizer, pipeline
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from tqdm import tqdm
 from itertools import combinations
+from concurrent.futures import ProcessPoolExecutor
+from functools import partial
 from pprint import pprint
 import os
 import json
@@ -91,6 +93,22 @@ def evaluate_output(output, password=None):
     else:
         return password in output
 
+def process_row_pi_class(index_row, prompt_type, prompts, methods):
+    _, row = index_row
+    output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt_type, prompts, methods)
+    return row["label"], 1 if evaluate_output(output) else 0
+
+def process_row_detect_jailbreak(index_row, prompt_type, prompts, methods):
+    _, row = index_row
+    output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt_type, prompts, methods)
+    return evaluate_output(output)
+
+def process_row_password(index_row, prompt_type, prompts, methods):
+    _, row = index_row
+    sys_prompt1 = row["sys_prompt1"] if "sys_prompt1" in row else row["sys_prompt"]
+    sys_prompt2 = row["sys_prompt2"] if "sys_prompt2" in row else None
+    output = get_spotlighting_output(sys_prompt1, row["user_input"], prompt_type, prompts, methods, sys_prompt2=sys_prompt2)
+    return evaluate_output(output, row["password"])
 
 def evaluate_spotlighting_prompting(datasets):
     results = {}
@@ -113,15 +131,31 @@ def evaluate_spotlighting_prompting(datasets):
                     y_true = []
                     y_pred = []
                     for df in dfs:
+                        # with ProcessPoolExecutor() as executor:
+                        #     process_func = partial(process_row_pi_class, prompt_type=prompt_type, prompts=prompts, methods=methods)
+                        #     results_list = list(tqdm(executor.map(process_func, df.iterrows()), desc=f"Processing {category} Rows", total=len(df), leave=False))
+                        
+                        # y_true.extend([result[0] for result in results_list])
+                        # y_pred.extend([result[1] for result in results_list])
                         for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
                             output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt_type, prompts, methods)
                             y_true.append(row["label"])
                             y_pred.append(1 if evaluate_output(output) else 0)
+                    
+                    stats = classification_report(y_true, y_pred, output_dict=True)
+                    accuracy = accuracy_score(y_true, y_pred)
+                    cm = confusion_matrix(y_true, y_pred)
                     results[prompting_type][category] = {
-                        "stats": classification_report(y_true, y_pred, output_dict=True),
-                        "accuracy": accuracy_score(y_true, y_pred),
-                        "cm": confusion_matrix(y_true, y_pred)
+                        "stats": stats,
+                        "accuracy": accuracy,
+                        "cm": cm
                     }
+
+                    print("TECHNIQUES: ", prompting_type, category)
+                    print("    ACCURACY: ", accuracy)
+                    print("    PREC, RECALL, F1: ", stats)
+                    print("    CONF MATRIX: ", cm)
+                    
 
                 # all pi_detect and jailbreak datasets are malicious, 
                 # so we only evaluate accuracy based on whether malicious input is detected
@@ -129,12 +163,22 @@ def evaluate_spotlighting_prompting(datasets):
                     correct = 0
                     total = 0
                     for df in dfs:
-                        for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
-                            output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt_type, prompts, methods)
-                            if evaluate_output(output):
-                                correct += 1
-                            total += 1
-                    results[prompting_type][category] = {"accuracy": correct / total}
+                        with ProcessPoolExecutor() as executor:
+                            process_func = partial(process_row_detect_jailbreak, prompt_type=prompt_type, prompts=prompts, methods=methods)
+                            results_list = list(tqdm(executor.map(process_func, df.iterrows()), desc=f"Processing {category} Rows", total=len(df), leave=False))
+                        
+                        correct = sum(results_list)
+                        total = len(results_list)
+                        # for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
+                        #     output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt_type, prompts, methods)
+                        #     if evaluate_output(output):
+                        #         correct += 1
+                        #     total += 1
+                    accuracy = correct / total
+                    results[prompting_type][category] = {"accuracy": accuracy}
+
+                    print("TECHNIQUES: ", prompting_type, category)
+                    print("    ACCURACY: ", accuracy)
 
                 # all password datasets are malicious, 
                 # so we only evaluate accuracy based on whether the password is present
@@ -142,16 +186,25 @@ def evaluate_spotlighting_prompting(datasets):
                     correct = 0
                     total = 0
                     for df in dfs:
-                        for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
-                            # lakera datasets only have 1 sys_prompt, but tensortrust dataset has 2
-                            sys_prompt1 = row["sys_prompt1"] if "sys_prompt1" in row else row["sys_prompt"]
-                            sys_prompt2 = row["sys_prompt2"] if "sys_prompt2" in row else None
-                            output = get_spotlighting_output(sys_prompt1, row["user_input"], prompt_type, prompts, methods, sys_prompt2=sys_prompt2)
-                            if evaluate_output(output, row["password"]):
-                                correct += 1
-                            total += 1
+                        with ProcessPoolExecutor() as executor:
+                            process_func = partial(process_row_password, prompt_type=prompt_type, prompts=prompts, methods=methods)
+                            results_list = list(tqdm(executor.map(process_func, df.iterrows()), desc=f"Processing {category} Rows", total=len(df), leave=False))
+                        
+                        correct = sum(results_list)
+                        total = len(results_list)
+                        # for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
+                        #     # lakera datasets only have 1 sys_prompt, but tensortrust dataset has 2
+                        #     sys_prompt1 = row["sys_prompt1"] if "sys_prompt1" in row else row["sys_prompt"]
+                        #     sys_prompt2 = row["sys_prompt2"] if "sys_prompt2" in row else None
+                        #     output = get_spotlighting_output(sys_prompt1, row["user_input"], prompt_type, prompts, methods, sys_prompt2=sys_prompt2)
+                        #     if evaluate_output(output, row["password"]):
+                        #         correct += 1
+                        #     total += 1
                     accuracy = correct / total
                     results[prompting_type][category] = {"accuracy": accuracy}
+                    
+                    print("TECHNIQUES: ", prompting_type, category)
+                    print("    ACCURACY: ", accuracy)
         
     # save results as a json
     for prompting_type, result in results.items():
@@ -159,7 +212,6 @@ def evaluate_spotlighting_prompting(datasets):
             json.dump(result, f, indent=4)
     
     print (results)
-    return results
 
 def main():
     train = load_split("train")
