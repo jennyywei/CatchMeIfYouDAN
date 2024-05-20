@@ -213,6 +213,13 @@ def evaluate_spotlighting_prompting(datasets):
     
     print (results)
 
+def analyze_metrics():
+    # prompt_types = ["zs", "os", "fs"] # zero shot, one shot, few shot
+    path = "results"
+    metrics = os.listdir(path)
+
+
+
 def main():
     train = load_split("train")
     validation = load_split("validation")
