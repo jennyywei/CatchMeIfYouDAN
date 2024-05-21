@@ -91,8 +91,7 @@ def filter_all_english(name, df):
     
     if filtered_df.empty:
         print(f"No rows in {name} dataset passed the English check - dataset useless.")
-    # else: # for debugging
-    #     print(f"Filtered DataFrame:\n{filtered_df.head()}")
+
     tqdm._instances.clear()
     return filtered_df
 
@@ -195,43 +194,43 @@ def clean(name, dataset):
     
 
 ### cleans dataset by calling clean(), then splits train/valid/test and saves
-### all the datasets are either already split train/valid/test, split train/test, or not split at all
+### other than lakera_summ and protectai_jailbreak (which are too small), all datasets are modified to have a 300-50-50 split
+### all data sets have a 75-12.5-12.5 (percentage) split
 def clean_split_save(name, dataset, flag=False, save_dir="datasets"):
     splits = dataset.keys()
-    clean_data = {}
-    
-    # split train into train and validation (train and test already exist)
-    if "train" in splits and "test" in splits and "validation" not in splits:
-        train, val = train_test_split(dataset["train"].to_pandas(), test_size=0.15, random_state=42)
-        clean_data["train"] = clean(name, train)
-        clean_data["validation"] = clean(name, val)
-        clean_data["test"] = clean(name, dataset["test"])
+    clean_splits = {}
 
-    # split train into train, test, and validation
-    elif ("train" in splits and "test" not in splits) or flag: 
-        # flag is only true for raw datasets that have not been split or have keys
-        train = dataset["train"].to_pandas() if flag == False else dataset
+    combined_data = pd.concat([dataset[split].to_pandas() for split in splits]) if flag == False else dataset
+    data = combined_data
 
-        # split train into train, test, and validation
-        train_val, test = train_test_split(train, test_size=0.15, random_state=42)
-        train, val = train_test_split(train_val, test_size=0.176, random_state=42) # 0.85 * 0.176 = 0.1496
-        clean_data["train"] = clean(name, train)
-        clean_data["validation"] = clean(name, val)
-        clean_data["test"] = clean(name, test)
-    
-    else:
-        # clean existing splits
-        for split in splits:
-            clean_data[split] = clean(name, dataset[split].to_pandas())
+    # datsets with 1000+ entries need to be cut down for time
+    if name in ["pi_hackaprompt", "lakera_mosscap", "dan_jailbreak"]:
+        sampled_data = combined_data.sample(n=2000, random_state=42)
+        data = sampled_data
 
+    # clean data sample and then cut down to 400 exactly
+    clean_data = clean(name, data)
+    if len(clean_data) > 400:
+        clean_data = clean_data.sample(n=400, random_state=42)
+        
+    train_val, test = train_test_split(clean_data, test_size=0.125, random_state=42)
+    train, val = train_test_split(train_val, test_size=0.1428, random_state=42) # 0.875 * 0.1428 ≈ 0.125
+
+    clean_splits["train"] = train
+    clean_splits["validation"] = val
+    clean_splits["test"] = test
+
+    # save newly cleaned & split datasets
     dataset_path = os.path.join(save_dir, name.replace("/", "_"))
     os.makedirs(dataset_path, exist_ok=True)
-    for split, data in clean_data.items():
+    for split, data in clean_splits.items():
         if not data.empty:
             data.to_parquet(os.path.join(dataset_path, f"{split}.parquet"), index=False)
         else:
             print(f"{name} dataset {split} split empty & not saved.")
-    print(f"{name} dataset cleaned, split, and saved. Path: {dataset_path}")
+    print(f"{name} dataset cleaned, split, and saved. "
+          f"Split: {clean_splits['train'].shape[0]}-{clean_splits['validation'].shape[0]}-{clean_splits['test'].shape[0]}. " 
+          f"Path: {dataset_path}")
 
 
 ############################## MAIN METHOD ##############################
