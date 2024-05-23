@@ -5,10 +5,14 @@ from pprint import pprint
 
 ### delimiting: mark where user input starts and ends
 def delimiting(user_input):
+    if user_input is None:
+        return ""
     return f"[START]{user_input}[END]"
 
 ### datamarking: replace spaces with special char (^)
 def datamarking(user_input):
+    if user_input is None:
+        return ""
     return user_input.translate(str.maketrans(" ", "^"))
 
 
@@ -26,6 +30,9 @@ def encode_binary(user_input):
 
 ### determines which encoding to use and calls helper function
 def encoding(user_input, method="base64"):
+    if user_input is None:
+        return ""
+    
     if method == "rot13":
         return encode_rot13(user_input)
     elif method == "binary":
