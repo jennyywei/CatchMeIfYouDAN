@@ -199,7 +199,7 @@ def handle_classification_task(dfs, category, results, prompt_type, prompts, met
         "cm": cm.tolist()
     }
 
-    print("TECHNIQUES: ", f"{prompt_type}_{"_".join(methods)}", category)
+    print("TECHNIQUES: ", f"{prompt_type}_{'_'.join(methods)}", category)
     print("    ACCURACY: ", accuracy)
     print("    PREC, RECALL, F1: ", stats)
     print("    CONF MATRIX: ", cm)
@@ -226,7 +226,7 @@ def handle_detection_task(dfs, category, results, prompt_type, prompts, methods)
     accuracy = correct / total
     results[category] = {"accuracy": accuracy}
 
-    print("TECHNIQUES: ", f"{prompt_type}_{"_".join(methods)}", category)
+    print("TECHNIQUES: ", f"{prompt_type}_{'_'.join(methods)}", category)
     print("    ACCURACY: ", accuracy)
 
 
@@ -254,9 +254,132 @@ def handle_password_task(dfs, category, results, prompt_type, prompts, methods):
     accuracy = correct / total
     results[category] = {"accuracy": accuracy}
 
-    print("TECHNIQUES: ", f"{prompt_type}_{"_".join(methods)}", category)
+    print("TECHNIQUES: ", f"{prompt_type}_{'_'.join(methods)}", category)
     print("    ACCURACY: ", accuracy)
 
+
+############################## RUN BASELINE ##############################
+
+def get_baseline_output(sys_prompt, user_input, sys_prompt2=None):
+    input_text = sys_prompt + "\n" + user_input
+    if sys_prompt2 != None:
+        input_text += "\n" + sys_prompt2
+
+    # trim inputs if necessary
+    max_tokens = 1024
+    input_max = 1000
+    input_ids = tokenizer.encode(input_text, add_special_tokens=False)
+    if len(input_ids) > max_tokens:
+        input_ids = input_ids[:input_max]
+        input_text = tokenizer.decode(input_ids, clean_up_tokenization_spaces=True)
+
+    # send inputs to llm
+    max_new_tokens = min(100, max_tokens - len(input_ids))
+    outputs = llm(input_text, max_new_tokens=max_new_tokens, num_return_sequences=1, truncation=True)
+    output = outputs[0]["generated_text"]
+    if output.startswith(input_text):
+        output = output[len(input_text):].strip()
+
+    return output
+
+
+# evalutes the performance of the baseline model on the given datasets
+    # args: 
+    #     datasets (dict): dictionary of datasets for each category
+    # results: none (saves to json file in results dir)
+def evaluate_baseline(datasets):
+    results = {}
+    
+    for category, dfs in datasets.items():
+        if category == "pi_class":
+            handle_classification_task_baseline(dfs, category, results)
+                    
+        elif category in ["pi_detect", "jailbreak"]:
+            handle_detection_task_baseline(dfs, category, results)
+
+        elif category == "password":
+            handle_password_task_baseline(dfs, category, results)
+        
+        # save results as a json
+        with open(os.path.join(results_dir, f"{category}_baseline_metrics.json"), "w") as f:
+            json.dump(results[category], f, indent=4)
+        print(f"Baseline results saved at results/{category}_baseline_metrics.json")
+
+
+# helper function for evaluate_baseline that works on the pi_class datasets
+    # args: 
+    #     dfs (list of DataFrame) - list of dfs
+    #     category (str) - the category of the dataset being processed
+    #     results (dict) - dictionary to store results
+    # returns: none - updates results without returning
+def handle_classification_task_baseline(dfs, category, results):
+    y_true = []
+    y_pred = []
+    for df in dfs:
+        for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
+            output = get_baseline_output(row["sys_prompt"], row["user_input"])
+            y_true.append(row["label"])
+            y_pred.append(1 if evaluate_output(output) else 0)
+    
+    stats = classification_report(y_true, y_pred, output_dict=True)
+    accuracy = accuracy_score(y_true, y_pred)
+    cm = confusion_matrix(y_true, y_pred)
+    results[category] = {
+        "stats": stats,
+        "accuracy": accuracy,
+        "cm": cm.tolist()
+    }
+
+    print("BASELINE", category)
+    print("    ACCURACY: ", accuracy)
+    print("    PREC, RECALL, F1: ", stats)
+    print("    CONF MATRIX: ", cm)
+
+# helper function for evaluate_baseline that works on the jailbreak and pi_detect datasets
+    # args: 
+    #     dfs (list of DataFrame) - list of dfs
+    #     category (str) - the category of the dataset being processed
+    #     results (dict) - dictionary to store results
+    # returns: none - updates results without returning
+def handle_detection_task_baseline(dfs, category, results):
+    correct = 0
+    total = 0
+    for df in dfs:
+        for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
+            output = get_baseline_output(row["sys_prompt"], row["user_input"])
+            if evaluate_output(output):
+                correct += 1
+            total += 1
+    accuracy = correct / total
+    results[category] = {"accuracy": accuracy}
+
+    print("BASELINE", category)
+    print("    ACCURACY: ", accuracy)
+
+# helper function for evaluate_baseline that works on the password datasets
+    # args: 
+    #     dfs (list of DataFrame) - list of dfs
+    #     category (str) - the category of the dataset being processed
+    #     results (dict) - dictionary to store results
+    # returns: none - updates results without returning
+def handle_password_task_baseline(dfs, category, results):
+    correct = 0
+    total = 0
+    for df in dfs:
+        for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
+            sys_prompt1 = row["sys_prompt1"] if "sys_prompt1" in row else row["sys_prompt"]
+            sys_prompt2 = row["sys_prompt2"] if "sys_prompt2" in row else None
+            user_input = row["user_input"]
+
+            output = get_baseline_output(sys_prompt1, user_input, sys_prompt2)
+            if evaluate_output(output, row["password"]):
+                correct += 1
+            total += 1
+    accuracy = correct / total
+    results[category] = {"accuracy": accuracy}
+
+    print("BASELINE", category)
+    print("    ACCURACY: ", accuracy)
 
 ############################## MAIN METHOD ##############################
 
@@ -265,8 +388,8 @@ def main():
     validation = load_split("validation")
     # test = load_split("test")
 
-    # evaluate_baseline(validation)
-    evaluate_spotlighting_prompting(validation)
+    evaluate_baseline(validation)
+    # evaluate_spotlighting_prompting(validation)
 
 if __name__ == "__main__":
     main()
