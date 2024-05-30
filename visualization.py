@@ -6,11 +6,11 @@ import seaborn as sns
 
 datasets = ["pi_class", "pi_detect", "jailbreak", "password"]
 
-results_dir = "results/baseline"
-bargraph_order = ["zs", "os", "fs"]
+# results_dir = "results/baseline"
+# bargraph_order = ["zs", "os", "fs"]
 
-# results_dir = "results/spotlighting"
-# bargraph_order = []
+results_dir = "results/spotlighting"
+bargraph_order = ["dl", "dm", "ec", "dl_dm", "dl_ec", "dm_ec", "dl_dm_ec"]
 
 def load_results(dir):
     data = {}
@@ -33,7 +33,7 @@ def accuracy(results):
     for dataset in datasets:
         plt.figure(figsize=(10, 6))
         ax = sns.barplot(x=model_names, y=accuracies[dataset], order=bargraph_order)
-        for p in ax.patches: # annotate bras
+        for p in ax.patches: # annotate bars
             ax.annotate(f'{p.get_height():.4f}', 
                         (p.get_x() + p.get_width() / 2., p.get_height()), 
                         ha='center', va='baseline', fontsize=12, color='black', xytext=(0, 5), 

@@ -177,9 +177,12 @@ def handle_classification_task(dfs, category, results, prompt, methods):
     y_pred = []
     for df in dfs:
         for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
-            output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt, methods)
-            y_true.append(row["label"])
-            y_pred.append(1 if evaluate_output(output) else 0)
+            try:
+                output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt, methods)
+                y_true.append(row["label"])
+                y_pred.append(1 if evaluate_output(output) else 0)
+            except Exception as e:
+                print(f"Error processing data point: {e}")
     
     stats = classification_report(y_true, y_pred, output_dict=True)
     accuracy = accuracy_score(y_true, y_pred)
@@ -210,10 +213,13 @@ def handle_detection_task(dfs, category, results, prompt, methods):
     total = 0
     for df in dfs:
         for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
-            output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt, methods)
-            if evaluate_output(output):
-                correct += 1
-            total += 1
+            try:
+                output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt, methods)
+                if evaluate_output(output):
+                    correct += 1
+                total += 1
+            except Exception as e:
+                print(f"Error processing data point: {e}")
     accuracy = correct / total
     results[category] = {"accuracy": accuracy}
 
@@ -235,13 +241,16 @@ def handle_password_task(dfs, category, results, prompt, methods):
     total = 0
     for df in dfs:
         for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
-            # lakera datasets only have 1 sys_prompt, but tensortrust dataset has 2
-            sys_prompt1 = row["sys_prompt1"] if "sys_prompt1" in row else row["sys_prompt"]
-            sys_prompt2 = row["sys_prompt2"] if "sys_prompt2" in row else None
-            output = get_spotlighting_output(sys_prompt1, row["user_input"], prompt, methods, sys_prompt2=sys_prompt2)
-            if evaluate_output(output, row["password"]):
-                correct += 1
-            total += 1
+            try:
+                # lakera datasets only have 1 sys_prompt, but tensortrust dataset has 2
+                sys_prompt1 = row["sys_prompt1"] if "sys_prompt1" in row else row["sys_prompt"]
+                sys_prompt2 = row["sys_prompt2"] if "sys_prompt2" in row else None
+                output = get_spotlighting_output(sys_prompt1, row["user_input"], prompt, methods, sys_prompt2=sys_prompt2)
+                if evaluate_output(output, row["password"]):
+                    correct += 1
+                total += 1
+            except Exception as e:
+                print(f"Error processing data point: {e}")
     accuracy = correct / total
     results[category] = {"accuracy": accuracy}
 
