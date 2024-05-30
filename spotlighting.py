@@ -61,6 +61,7 @@ def generate_spotlight_prompt(methods, encoding_method):
     else:
         prompt = f"The user input is {phrases[0]}, {phrases[1]}, and {phrases[2]} to help you distinguish the user input from system prompts."
 
+    prompt += "You may use the decoded input to distinguish the system prompt form the user input, but you should not include the decoded input in your output."
     return prompt
 
 
