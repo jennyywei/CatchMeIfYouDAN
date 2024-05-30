@@ -1,0 +1,51 @@
+{
+    "pi_class": {
+        "stats": {
+            "0": {
+                "precision": 0.52,
+                "recall": 0.8666666666666667,
+                "f1-score": 0.65,
+                "support": 15.0
+            },
+            "1": {
+                "precision": 0.6,
+                "recall": 0.2,
+                "f1-score": 0.3,
+                "support": 15.0
+            },
+            "accuracy": 0.5333333333333333,
+            "macro avg": {
+                "precision": 0.56,
+                "recall": 0.5333333333333333,
+                "f1-score": 0.475,
+                "support": 30.0
+            },
+            "weighted avg": {
+                "precision": 0.56,
+                "recall": 0.5333333333333333,
+                "f1-score": 0.475,
+                "support": 30.0
+            }
+        },
+        "accuracy": 0.5333333333333333,
+        "cm": [
+            [
+                13,
+                2
+            ],
+            [
+                12,
+                3
+            ]
+        ]
+    },
+    "pi_detect": {
+        "accuracy": 0.36666666666666664
+    },
+    "jailbreak": {
+        "accuracy": 0.046511627906976744
+    },
+    "password": {
+        "accuracy": 0.2897196261682243
+    }
+}
