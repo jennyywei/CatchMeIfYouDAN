@@ -69,10 +69,11 @@ def load_prompts(prompt_paths):
     # no args
     # returns: list of tuples that represent a combination of spotlighting methods
 def generate_spotlighting_combos():
-    methods = ["dl", "dm", "ec"] # delimiting, datamarking, encoding
-    combs = []
-    for i in range(1, len(methods) + 1):
-        combs.extend(combinations(methods, i))
+    combs = [('dm', 'ec'), ('dl', 'dm', 'ec')]
+    # methods = ["dl", "dm", "ec"] # delimiting, datamarking, encoding
+    # combs = []
+    # for i in range(1, len(methods) + 1):
+    #     combs.extend(combinations(methods, i))
         
     return combs
 
@@ -89,8 +90,8 @@ def generate_spotlighting_combos():
     #     sys_prompt2 (str, optional) - optional system prompt after the user input
     # returns: the output generated (str)
 def get_spotlighting_output(sys_prompt, user_input, prompt, methods, sys_prompt2=None):
-    encoding_method = "base64"
-    # encoding_method = "rot13"
+    # encoding_method = "base64"
+    encoding_method = "rot13" # keeps text length the same
     # encoding_method = "binary"
 
     sys_prompt += "\n" + prompt
