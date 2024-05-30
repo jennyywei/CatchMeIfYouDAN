@@ -1,18 +1,22 @@
-from transformers import GPT2LMHeadModel, GPT2Tokenizer, pipeline
-# from transformers import DistilBertForSequenceClassification, DistilBertTokenizer, pipeline
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from tqdm import tqdm
 from itertools import combinations
-from concurrent.futures import ProcessPoolExecutor
-from functools import partial
+# from concurrent.futures import ProcessPoolExecutor
+# from functools import partial
 from pprint import pprint
 import os
 import json
+import requests
+import time
 import pandas as pd
 
 from spotlighting import spotlighting
 
 ############################## GLOBAL VARIABLES AND DEFS ##############################
+
+API_KEY = "2446f4aba26f829a8e1238df75c078d7adb237fac3b6b077ac82a940d990bca8"
+API_ENDPOINT = "https://api.together.xyz/v1/completions"
+MODEL = "meta-llama/Llama-2-7b-chat-hf"
 
 dataset_cats = {
     "pi_class": ["pi_deepset"],
@@ -27,24 +31,13 @@ prompt_paths = ["prompts/prompt_zs.txt",
                 "prompts/prompt_os.txt", 
                 "prompts/prompt_fs.txt"]
 
-results_dir = "results"
-
-tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-model = GPT2LMHeadModel.from_pretrained("gpt2")
-llm = pipeline("text-generation", model=model, tokenizer=tokenizer)
-
-# tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
-# model = DistilBertForSequenceClassification.from_pretrained("distilbert-base-uncased")
-# llm = pipeline("text-classification", model=model, tokenizer=tokenizer)
-
-
 ############################## LOADING FILES AND TOOLS ##############################
 
 # loads all dataset splits (train, valid, or test) for each dataset category
     # arg: split (str) - dataset split to load (train, validation, or test)
     # returns: dictionary containing the datasets (dfs) for each category
 def load_split(split):
-    if (split != "train" and split != "validation" and split != "test"):
+    if (split != "train" and split != "validation" and split != "test" and split != "validation_spotlighting"):
         print("Tried to load an invalid split")
         return
     
@@ -76,14 +69,12 @@ def load_prompts(prompt_paths):
     # no args
     # returns: list of tuples that represent a combination of spotlighting methods
 def generate_spotlighting_combos():
-    return [('ec',), ('dl', 'dm'), ('dl', 'ec'), ('dm', 'ec'), ('dl', 'dm', 'ec')]
-
-    # methods = ["dl", "dm", "ec"] # delimiting, datamarking, encoding
-    # combs = []
-    # for i in range(1, len(methods) + 1):
-    #     combs.extend(combinations(methods, i))
+    methods = ["dl", "dm", "ec"] # delimiting, datamarking, encoding
+    combs = []
+    for i in range(1, len(methods) + 1):
+        combs.extend(combinations(methods, i))
         
-    # return combs
+    return combs
 
 
 ############################## RUN SPOTLIGHTING & PROMPTING TESTS ##############################
@@ -97,29 +88,33 @@ def generate_spotlighting_combos():
     #     methods (list) - a list of spotlighting methods to apply
     #     sys_prompt2 (str, optional) - optional system prompt after the user input
     # returns: the output generated (str)
-def get_spotlighting_output(sys_prompt, user_input, prompt_type, prompts, methods, sys_prompt2=None):
+def get_spotlighting_output(sys_prompt, user_input, prompt, methods, sys_prompt2=None):
     encoding_method = "base64"
     # encoding_method = "rot13"
     # encoding_method = "binary"
 
-    sys_prompt += "\n" + prompts.get(prompt_type)
+    sys_prompt += "\n" + prompt
     spotlighted_input = spotlighting(sys_prompt, user_input, methods, sys_prompt2, encoding_method=encoding_method)
 
-    # trim inputs if necessary
-    max_tokens = 1024
-    input_max = 1000
-    input_ids = tokenizer.encode(spotlighted_input, add_special_tokens=False)
-    if len(input_ids) > max_tokens:
-        input_ids = input_ids[:input_max]
-        spotlighted_input = tokenizer.decode(input_ids, clean_up_tokenization_spaces=True)
+    payload = {
+        "model": MODEL,
+        "prompt": spotlighted_input + "\n\n Response: ",
+        "max_tokens": 200,
+        "stop": ["</s>"]
+    }
 
-    # send inputs to llm
-    max_new_tokens = min(100, max_tokens - len(input_ids))
-    outputs = llm(spotlighted_input, max_new_tokens=max_new_tokens, num_return_sequences=1, truncation=True)#, pad_token_id=tokenizer.eos_token_id)
-    output = outputs[0]["generated_text"]
-    if output.startswith(spotlighted_input):
-        output = output[len(spotlighted_input):].strip()
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "Authorization": f"Bearer {API_KEY}"
+    }
 
+    response = requests.post(API_ENDPOINT, json=payload, headers=headers)
+    response = json.loads(response.text)
+    output = response['choices'][0]['text']
+
+    # add a delay to avoid rate limiting
+    time.sleep(1)
     return output
 
 
@@ -139,37 +134,33 @@ def evaluate_output(output, password=None):
     # args: 
     #     datasets (dict): dictionary of datasets for each category
     # results: none (saves to json file in results dir)
-def evaluate_spotlighting_prompting(datasets):
+def evaluate_spotlighting_prompting(datasets, results_dir="results/spotlighting"):
     results = {}
-    prompt_types = ["zs", "os", "fs"] # zero shot, one shot, few shot
-    prompt_files = ["prompts/prompt_zs.txt", "prompts/prompt_os.txt", "prompts/prompt_fs.txt"]
-    prompts = load_prompts(prompt_files)
+    os_prompt = load_prompts(prompt_paths)["os"] # most successful kind of prompting from baseline
     spotlighting_methods = generate_spotlighting_combos()
 
-    for prompt_type in tqdm(prompt_types, total=len(prompt_types), desc="Prompt Types"): # try all combinations of prompt types
-        for methods in tqdm(spotlighting_methods, total=len(spotlighting_methods), desc="Spotlighting Methods"): # and all combinations of spotlighting methods
-            spotlighting_name = "_".join(methods)
-            prompting_type = f"{prompt_type}_{spotlighting_name}"
-            results[prompting_type] = {}
+    for methods in tqdm(spotlighting_methods, total=len(spotlighting_methods), desc="Spotlighting Methods"): # and all combinations of spotlighting methods
+        spotlighting_type = "_".join(methods)
+        results[spotlighting_type] = {}
 
-            for category, dfs in datasets.items():
-                # all pi_class datasets are classification tasks, so we analyze all true and mis classifications
-                # store precision, accuracy, recall, f1, and confusion matrix metrics
-                if category == "pi_class":
-                    handle_classification_task(dfs, category, results[prompting_type], prompt_type, prompts, methods)
-                    
-                # all pi_detect and jailbreak datasets are malicious, so we only evaluate accuracy based on if malicious input is detected
-                elif category in ["pi_detect", "jailbreak"]:
-                    handle_detection_task(dfs, category, results[prompting_type], prompt_type, prompts, methods)
+        for category, dfs in datasets.items():
+            # all pi_class datasets are classification tasks, so we analyze all true and mis classifications
+            # store precision, accuracy, recall, f1, and confusion matrix metrics
+            if category == "pi_class":
+                handle_classification_task(dfs, category, results[spotlighting_type], os_prompt, methods)
+                
+            # all pi_detect and jailbreak datasets are malicious, so we only evaluate accuracy based on if malicious input is detected
+            elif category in ["pi_detect", "jailbreak"]:
+                handle_detection_task(dfs, category, results[spotlighting_type], os_prompt, methods)
 
-                # all password datasets are malicious, so we only evaluate accuracy based on whether the password is present
-                elif category == "password":
-                    handle_password_task(dfs, category, results[prompting_type], prompt_type, prompts, methods)
-        
-            # save results as a json
-            with open(os.path.join(results_dir, f"{prompting_type}_metrics.json"), "w") as f:
-                json.dump(results[prompting_type], f, indent=4)
-            print(f"Results saved at results/{prompting_type}_metrics.json")
+            # all password datasets are malicious, so we only evaluate accuracy based on whether the password is present
+            elif category == "password":
+                handle_password_task(dfs, category, results[spotlighting_type], os_prompt, methods)
+    
+        # save results as a json
+        with open(os.path.join(results_dir, f"{spotlighting_type}_metrics.json"), "w") as f:
+            json.dump(results[spotlighting_type], f, indent=4)
+        print(f"Results saved at results/spotlighting/{spotlighting_type}_metrics.json")
     
 
 # helper function for evaluate_spotlighting_prompting that works on the pi_class datasets
@@ -181,12 +172,12 @@ def evaluate_spotlighting_prompting(datasets):
     #     prompts (list) - list of loaded prompts
     #     methods (list) - list of spotlighting methods
     # returns: none - updates results without returning
-def handle_classification_task(dfs, category, results, prompt_type, prompts, methods):
+def handle_classification_task(dfs, category, results, prompt, methods):
     y_true = []
     y_pred = []
     for df in dfs:
         for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
-            output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt_type, prompts, methods)
+            output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt, methods)
             y_true.append(row["label"])
             y_pred.append(1 if evaluate_output(output) else 0)
     
@@ -199,7 +190,7 @@ def handle_classification_task(dfs, category, results, prompt_type, prompts, met
         "cm": cm.tolist()
     }
 
-    print("TECHNIQUES: ", f"{prompt_type}_{'_'.join(methods)}", category)
+    print("TECHNIQUES: ", f"{'_'.join(methods)}", category)
     print("    ACCURACY: ", accuracy)
     print("    PREC, RECALL, F1: ", stats)
     print("    CONF MATRIX: ", cm)
@@ -214,19 +205,19 @@ def handle_classification_task(dfs, category, results, prompt_type, prompts, met
     #     prompts (list) - list of loaded prompts
     #     methods (list) - list of spotlighting methods
     # returns: none - updates results without returning
-def handle_detection_task(dfs, category, results, prompt_type, prompts, methods):
+def handle_detection_task(dfs, category, results, prompt, methods):
     correct = 0
     total = 0
     for df in dfs:
         for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
-            output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt_type, prompts, methods)
+            output = get_spotlighting_output(row["sys_prompt"], row["user_input"], prompt, methods)
             if evaluate_output(output):
                 correct += 1
             total += 1
     accuracy = correct / total
     results[category] = {"accuracy": accuracy}
 
-    print("TECHNIQUES: ", f"{prompt_type}_{'_'.join(methods)}", category)
+    print("TECHNIQUES: ", f"{'_'.join(methods)}", category)
     print("    ACCURACY: ", accuracy)
 
 
@@ -239,7 +230,7 @@ def handle_detection_task(dfs, category, results, prompt_type, prompts, methods)
     #     prompts (list) - list of loaded prompts
     #     methods (list) - list of spotlighting methods
     # returns: none - updates results without returning
-def handle_password_task(dfs, category, results, prompt_type, prompts, methods):
+def handle_password_task(dfs, category, results, prompt, methods):
     correct = 0
     total = 0
     for df in dfs:
@@ -247,39 +238,43 @@ def handle_password_task(dfs, category, results, prompt_type, prompts, methods):
             # lakera datasets only have 1 sys_prompt, but tensortrust dataset has 2
             sys_prompt1 = row["sys_prompt1"] if "sys_prompt1" in row else row["sys_prompt"]
             sys_prompt2 = row["sys_prompt2"] if "sys_prompt2" in row else None
-            output = get_spotlighting_output(sys_prompt1, row["user_input"], prompt_type, prompts, methods, sys_prompt2=sys_prompt2)
+            output = get_spotlighting_output(sys_prompt1, row["user_input"], prompt, methods, sys_prompt2=sys_prompt2)
             if evaluate_output(output, row["password"]):
                 correct += 1
             total += 1
     accuracy = correct / total
     results[category] = {"accuracy": accuracy}
 
-    print("TECHNIQUES: ", f"{prompt_type}_{'_'.join(methods)}", category)
+    print("TECHNIQUES: ", f"{'_'.join(methods)}", category)
     print("    ACCURACY: ", accuracy)
 
 
 ############################## RUN BASELINE ##############################
 
-def get_baseline_output(sys_prompt, user_input, sys_prompt2=None):
-    input_text = sys_prompt + "\n" + user_input
+def get_baseline_output(sys_prompt, user_input, prompt_type, prompts, sys_prompt2=None):
+    input_text = sys_prompt + "\n" + prompts.get(prompt_type) + "\n" + user_input
     if sys_prompt2 != None:
         input_text += "\n" + sys_prompt2
 
-    # trim inputs if necessary
-    max_tokens = 1024
-    input_max = 1000
-    input_ids = tokenizer.encode(input_text, add_special_tokens=False)
-    if len(input_ids) > max_tokens:
-        input_ids = input_ids[:input_max]
-        input_text = tokenizer.decode(input_ids, clean_up_tokenization_spaces=True)
+    payload = {
+        "model": MODEL,
+        "prompt": input_text + "\n\n Response: ",
+        "max_tokens": 200,
+        "stop": ["</s>"]
+    }
 
-    # send inputs to llm
-    max_new_tokens = min(100, max_tokens - len(input_ids))
-    outputs = llm(input_text, max_new_tokens=max_new_tokens, num_return_sequences=1, truncation=True)
-    output = outputs[0]["generated_text"]
-    if output.startswith(input_text):
-        output = output[len(input_text):].strip()
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json",
+        "Authorization": f"Bearer {API_KEY}"
+    }
 
+    response = requests.post(API_ENDPOINT, json=payload, headers=headers)
+    response = json.loads(response.text)
+    output = response['choices'][0]['text']
+
+    # add a delay to avoid rate limiting
+    time.sleep(1)
     return output
 
 
@@ -287,23 +282,29 @@ def get_baseline_output(sys_prompt, user_input, sys_prompt2=None):
     # args: 
     #     datasets (dict): dictionary of datasets for each category
     # results: none (saves to json file in results dir)
-def evaluate_baseline(datasets):
+def evaluate_baseline(datasets, results_dir="results/baseline"):
     results = {}
+    prompt_types = ["zs", "os", "fs"] # zero shot, one shot, few shot
+    prompt_files = ["prompts/prompt_zs.txt", "prompts/prompt_os.txt", "prompts/prompt_fs.txt"]
+    prompts = load_prompts(prompt_files)
     
-    for category, dfs in datasets.items():
-        if category == "pi_class":
-            handle_classification_task_baseline(dfs, category, results)
-                    
-        elif category in ["pi_detect", "jailbreak"]:
-            handle_detection_task_baseline(dfs, category, results)
+    for prompt_type in tqdm(prompt_types, total=len(prompt_types), desc="Prompt Types"): # try all combinations of prompt types
+        results[prompt_type] = {}
 
-        elif category == "password":
-            handle_password_task_baseline(dfs, category, results)
-        
+        for category, dfs in datasets.items():
+            if category == "pi_class":
+                handle_classification_task_baseline(dfs, category, results[prompt_type], prompt_type, prompts)
+                        
+            elif category in ["pi_detect", "jailbreak"]:
+                handle_detection_task_baseline(dfs, category, results[prompt_type], prompt_type, prompts)
+
+            elif category == "password":
+                handle_password_task_baseline(dfs, category, results[prompt_type], prompt_type, prompts)
+            
         # save results as a json
-        with open(os.path.join(results_dir, f"{category}_baseline_metrics.json"), "w") as f:
-            json.dump(results[category], f, indent=4)
-        print(f"Baseline results saved at results/{category}_baseline_metrics.json")
+        with open(os.path.join(results_dir, f"{prompt_type}_metrics.json"), "w") as f:
+            json.dump(results[prompt_type], f, indent=4)
+        print(f"Baseline results saved at results/baseline/{prompt_type}_metrics.json")
 
 
 # helper function for evaluate_baseline that works on the pi_class datasets
@@ -312,12 +313,12 @@ def evaluate_baseline(datasets):
     #     category (str) - the category of the dataset being processed
     #     results (dict) - dictionary to store results
     # returns: none - updates results without returning
-def handle_classification_task_baseline(dfs, category, results):
+def handle_classification_task_baseline(dfs, category, results, prompt_type, prompts):
     y_true = []
     y_pred = []
     for df in dfs:
         for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
-            output = get_baseline_output(row["sys_prompt"], row["user_input"])
+            output = get_baseline_output(row["sys_prompt"], row["user_input"], prompt_type, prompts)
             y_true.append(row["label"])
             y_pred.append(1 if evaluate_output(output) else 0)
     
@@ -335,18 +336,19 @@ def handle_classification_task_baseline(dfs, category, results):
     print("    PREC, RECALL, F1: ", stats)
     print("    CONF MATRIX: ", cm)
 
+
 # helper function for evaluate_baseline that works on the jailbreak and pi_detect datasets
     # args: 
     #     dfs (list of DataFrame) - list of dfs
     #     category (str) - the category of the dataset being processed
     #     results (dict) - dictionary to store results
     # returns: none - updates results without returning
-def handle_detection_task_baseline(dfs, category, results):
+def handle_detection_task_baseline(dfs, category, results, prompt_type, prompts):
     correct = 0
     total = 0
     for df in dfs:
         for _, row in tqdm(df.iterrows(), desc=f"Processing {category} Rows", total=len(df), leave=False):
-            output = get_baseline_output(row["sys_prompt"], row["user_input"])
+            output = get_baseline_output(row["sys_prompt"], row["user_input"], prompt_type, prompts)
             if evaluate_output(output):
                 correct += 1
             total += 1
@@ -356,13 +358,14 @@ def handle_detection_task_baseline(dfs, category, results):
     print("BASELINE", category)
     print("    ACCURACY: ", accuracy)
 
+
 # helper function for evaluate_baseline that works on the password datasets
     # args: 
     #     dfs (list of DataFrame) - list of dfs
     #     category (str) - the category of the dataset being processed
     #     results (dict) - dictionary to store results
     # returns: none - updates results without returning
-def handle_password_task_baseline(dfs, category, results):
+def handle_password_task_baseline(dfs, category, results, prompt_type, prompts):
     correct = 0
     total = 0
     for df in dfs:
@@ -371,7 +374,7 @@ def handle_password_task_baseline(dfs, category, results):
             sys_prompt2 = row["sys_prompt2"] if "sys_prompt2" in row else None
             user_input = row["user_input"]
 
-            output = get_baseline_output(sys_prompt1, user_input, sys_prompt2)
+            output = get_baseline_output(sys_prompt1, user_input, prompt_type, prompts, sys_prompt2=sys_prompt2)
             if evaluate_output(output, row["password"]):
                 correct += 1
             total += 1
@@ -381,15 +384,18 @@ def handle_password_task_baseline(dfs, category, results):
     print("BASELINE", category)
     print("    ACCURACY: ", accuracy)
 
+
 ############################## MAIN METHOD ##############################
 
 def main():
-    train = load_split("train")
-    validation = load_split("validation")
+    # train = load_split("train")
+    # validation = load_split("validation")
+    validation_spotlighting = load_split("validation_spotlighting")
     # test = load_split("test")
+    print("Datasets loaded")
 
-    evaluate_baseline(validation)
-    # evaluate_spotlighting_prompting(validation)
+    # evaluate_baseline(validation_spotlighting)
+    evaluate_spotlighting_prompting(validation_spotlighting)
 
 if __name__ == "__main__":
     main()

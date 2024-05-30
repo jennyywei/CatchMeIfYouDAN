@@ -4,8 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-results_dir = "results"
 datasets = ["pi_class", "pi_detect", "jailbreak", "password"]
+
+results_dir = "results/baseline"
+bargraph_order = ["zs", "os", "fs"]
+
+# results_dir = "results/spotlighting"
+# bargraph_order = []
 
 def load_results(dir):
     data = {}
@@ -27,7 +32,13 @@ def accuracy(results):
     # plot bar graphs for each dataset
     for dataset in datasets:
         plt.figure(figsize=(10, 6))
-        sns.barplot(x=model_names, y=accuracies[dataset])
+        ax = sns.barplot(x=model_names, y=accuracies[dataset], order=bargraph_order)
+        for p in ax.patches: # annotate bras
+            ax.annotate(f'{p.get_height():.4f}', 
+                        (p.get_x() + p.get_width() / 2., p.get_height()), 
+                        ha='center', va='baseline', fontsize=12, color='black', xytext=(0, 5), 
+                        textcoords='offset points')
+        
         plt.title(f"Accuracy Comparison for {dataset}")
         plt.xlabel("Models")
         plt.ylabel("Accuracy")
