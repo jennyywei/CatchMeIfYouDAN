@@ -6,11 +6,11 @@ import seaborn as sns
 
 datasets = ["pi_class", "pi_detect", "jailbreak", "password"]
 
-# results_dir = "results/baseline"
-# bargraph_order = ["zs", "os", "fs"]
+results_dir = "results/baseline"
+bargraph_order = ["zs", "os", "fs"]
 
-results_dir = "results/spotlighting"
-bargraph_order = ["dl", "dm", "ec", "dl_dm", "dl_ec", "dm_ec", "dl_dm_ec"]
+# results_dir = "results/spotlighting"
+# bargraph_order = ["dl", "dm", "ec", "dl_dm", "dl_ec", "dm_ec", "dl_dm_ec"]
 
 def load_results(dir):
     data = {}
@@ -31,7 +31,7 @@ def accuracy(results):
 
     # plot bar graphs for each dataset
     for dataset in datasets:
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(10, 6), dpi=250)
         ax = sns.barplot(x=model_names, y=accuracies[dataset], order=bargraph_order)
         for p in ax.patches: # annotate bars
             ax.annotate(f'{p.get_height():.4f}', 
@@ -53,7 +53,7 @@ def confusion_mat(results):
         recall = results[model]["pi_class"]["stats"]["weighted avg"]["recall"]
         f1_score = results[model]["pi_class"]["stats"]["weighted avg"]["f1-score"]
         
-        plt.figure(figsize=(10, 6))
+        plt.figure(figsize=(10, 6), dpi=250)
         sns.heatmap(cm, annot=True, fmt="d", cmap="Blues", cbar=False)
         plt.title(f"Confusion Matrix for {model} on pi_class Dataset")
         plt.xlabel("Predicted")
