@@ -4,7 +4,7 @@ Alice Guo, Grace Jin, Jenny Wei
 
 Stanford CS224N (Natural Language Processing with Deep Learning), Spring 2024
 
-## DATASETS + PREPROCESSING
+## DATASETS + SETUP
 
 ### Raw Datasets
 This project uses a total of 8 datasets from various sources. 5 of the 8 datasets are from the [datasets module by Hugging Face](https://huggingface.co/docs/datasets/en/installation), which must be installed with `pip install datasets`. These are:
@@ -22,11 +22,12 @@ The remaining 3 datasets must be downloaded and added to the `raw_datasets` dire
 8. ProtectAI jailbreak dataset: [`jailbreak.json`](https://github.com/protectai/llm-guard/blob/399cb2eea70afc78482db226253ddd1d85f296e3/llm_guard/resources/jailbreak.json)
 
 ### PreProcessing
-Then, run `python process_datasets.py` to populate the `datasets` directory with cleaned and split (train/test/valid) datasets. Since `process_datasets.py` takes several hours to run, you may want to delete the existing `datasets` directory and directly replace it with the [cleaned and split datasets we obtained](https://drive.google.com/file/d/1zIETkJ7Y1iIQ9bKcIgceaFSlX0vX4gPr/view?usp=sharing) instead.
+Then, run `python process_datasets.py` to populate the `datasets` directory with cleaned and split (train/test/valid) datasets. Since `process_datasets.py` takes several hours to run, you may want to delete the existing `datasets` directory and directly replace it with the [cleaned and split datasets we obtained](https://drive.google.com/file/d/1_7pvC6xR-JrQ0l1QbeFhOroAizhbA4Vw/view?usp=sharing) instead.
 
 ### Dataset Combination
 Although this project uses 8 datasets, we will combine performance metrics across several datasets according to the following categories:
 
+## EXPERIMENTS
 * **PROMPT INJECTION CLASSIFICATION**: Deepset (dataset includes malicious and innocuous prompts)
 * **PROMPT INJECTION DETECTION**: HackAPrompt (dataset only includes malicious prompts)
 * **JAILBREAK ATTEMPTS**: Do Anything Now, ProtectAI
