@@ -19,10 +19,10 @@ dataset_dir = "datasets"
 results_dir = "results"
 
 MAX_LEN = 512
-TRAIN_BATCH_SIZE = 4
-VALID_BATCH_SIZE = 2
-EPOCHS = 2
-LEARNING_RATE = 1e-05
+EPOCHS = 10
+BATCH_SIZES = [4, 8, 16]
+LEARNING_RATES= [5e-5, 4e-5, 3e-5, 2e-5, 1e-5]
+PATIENCE = 3
 
 ############################### DEVICE AND MODEL SET UP #######################################
 from torch import cuda
@@ -138,7 +138,7 @@ def train(epoch):
     epoch_accu = (n_correct * 100) / n_examples
     print(f"Training Loss Epoch: {epoch_loss}")
     print(f"Training Accuracy Epoch: {epoch_accu}")
-    return 
+    return epoch_loss, epoch_accu
 
 
 def valid(model, testing_loader):
@@ -171,43 +171,94 @@ def valid(model, testing_loader):
     print(f"Validation Loss Epoch: {epoch_loss}")
     print(f"Validation Accuracy Epoch: {epoch_accu}")
     
-    return epoch_accu
+    return epoch_loss, epoch_accu
 
-############################## RUN FINE-TUNING ##############################
+############################## LOAD DATASET ##############################
+results = {
+    f"batch_size_{bs}_lr_{lr}": {
+        'train_losses': {},
+        'train_accuracies': {},
+        'val_losses': {},
+        'val_accuracies': {}
+    }
+    for bs in BATCH_SIZES for lr in LEARNING_RATES
+}
+
 train_df = load_split("train")
 validation_df = load_split("validation")
 
-training_set = Deepset(train_df, tokenizer, MAX_LEN)
-testing_set = Deepset(validation_df, tokenizer, MAX_LEN)
+############################## RUN FINE-TUNING ##############################
+for bs in BATCH_SIZES:
+    for lr in LEARNING_RATES:
+        print(f"\nTesting with batch size: {bs}, learning rate: {lr}\n")
+        key = f"batch_size_{bs}_lr_{lr}"
+        training_set = Deepset(train_df, tokenizer, MAX_LEN)
+        testing_set = Deepset(validation_df, tokenizer, MAX_LEN)
 
-train_params = {
-    'batch_size': TRAIN_BATCH_SIZE,
-    'shuffle': True,
-    'num_workers': 0, # TODO: change if running on GPU?
-    'collate_fn': collate_fn
-}
+        train_params = {
+            'batch_size': bs,
+            'shuffle': True,
+            'num_workers': 0, # TODO: change if running on GPU?
+            'collate_fn': collate_fn
+        }
 
-test_params = {
-    'batch_size': VALID_BATCH_SIZE,
-    'shuffle': True,
-    'num_workers': 0, # TODO: change if running on GPU?
-    'collate_fn': collate_fn
-}
+        test_params = {
+            'batch_size': bs,
+            'shuffle': True,
+            'num_workers': 0, # TODO: change if running on GPU?
+            'collate_fn': collate_fn
+        }
 
-training_loader = DataLoader(training_set, **train_params)
-testing_loader = DataLoader(testing_set, **test_params)
-loss_function = torch.nn.CrossEntropyLoss()
-optimizer = torch.optim.Adam(params =  model.parameters(), lr=LEARNING_RATE)
+        training_loader = DataLoader(training_set, **train_params)
+        testing_loader = DataLoader(testing_set, **test_params)
+        loss_function = torch.nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(params =  model.parameters(), lr=lr)
 
-for epoch in tqdm(range(EPOCHS)):
-    train(epoch)
+        train_losses = {}
+        train_accuracies = {}
+        val_losses = {}
+        val_accuracies = {}
 
-accuracy = valid(model, testing_loader)
-print("Accuracy on test data = %0.2f%%" % accuracy)
+        best_val_loss = float('inf')  
+        patience_counter = 0
+        # training          
+        for epoch in tqdm(range(EPOCHS)):
+            train_loss, train_accu = train(epoch)
+            val_loss, val_accu = valid(model, testing_loader)
 
-output_model_path = 'models/pytorch_distilbert.bin'
-output_vocab_path = 'models/vocab_distilbert.bin'
+            # store metrics
+            train_losses[epoch] = train_loss
+            train_accuracies[epoch] = train_accu
+            val_losses[epoch] = val_loss
+            val_accuracies[epoch] = val_accu
+            
+            # early stopping logic
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                patience_counter = 0
+                torch.save(model.state_dict(), f'models/best_model_{key}.pth')
+            else:
+                patience_counter += 1
 
-model_to_save = model
-torch.save(model_to_save, output_model_path)
-tokenizer.save_vocabulary(output_vocab_path)
+            if patience_counter >= PATIENCE:
+                print(f"Early stopping at epoch {epoch}")
+                break
+
+        results[key]['train_losses'] = train_losses
+        results[key]['train_accuracies'] = train_accuracies
+        results[key]['val_losses'] = val_losses
+        results[key]['val_accuracies'] = val_accuracies
+
+        model.load_state_dict(torch.load(f'models/best_model_{key}.pth'))
+        loss, accuracy = valid(model, testing_loader)
+        print("Accuracy on test data = %0.2f%%" % accuracy)
+
+        output_model_path = f'models/pytorch_distilbert_{key}.bin'
+        output_vocab_path = f'models/vocab_distilbert_{key}.bin'
+
+        model_to_save = model
+        torch.save(model_to_save, output_model_path)
+        tokenizer.save_vocabulary(output_vocab_path)
+
+with open('models/training_metrics.json', 'w') as f:
+    json.dump(results, f)
