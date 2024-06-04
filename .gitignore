@@ -4,3 +4,5 @@
 /raw_datasets/*.csv
 /raw_datasets/*.json
 /raw_datasets/*.jsonl
+*.bin
+*.pth
