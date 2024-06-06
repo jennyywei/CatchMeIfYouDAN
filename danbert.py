@@ -222,7 +222,7 @@ for bs in BATCH_SIZES:
         best_val_loss = float('inf')  
         patience_counter = 0
         # training          
-        for epoch in tqdm(range(EPOCHS)):
+        for epoch in tqdm(1, range(EPOCHS) + 1):
             train_loss, train_accu = train(epoch)
             val_loss, val_accu = valid(model, testing_loader)
 
