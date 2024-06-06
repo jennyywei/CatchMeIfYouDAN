@@ -3,8 +3,10 @@ import pandas as pd
 
 def load_predictions(filepath):
     predictions = pd.read_csv(filepath)
-    predictions['Similarity Score'] = predictions['Similarity Score'].str.strip('[]').astype(float)
-    predictions = predictions['Similarity Score'].tolist()
+    # predictions['Similarity Score'] = predictions['Similarity Score'].str.strip('[]').astype(float)
+    # predictions = predictions['Similarity Score'].tolist()
+    predictions = predictions.iloc[:, 0].str.strip('[]').astype(float)
+    predictions = predictions.tolist()
     return predictions
 
 def load_true_labels(filepath):
@@ -25,7 +27,8 @@ def evaluate_accuracy_for_category(test_valid, dataset_cats):
         total_samples = 0
         weighted_sum = 0
         for dataset in datasets:
-            predictions_file = f'dansn_model/{test_valid}_preds/{dataset}_dansn.csv' # for danSN save format
+            # predictions_file = f'dansn_model/{test_valid}_preds/{dataset}_dansn.csv' # for danSN save format
+            predictions_file = f'danbert_model/{test_valid}_preds/{dataset}_danbert.csv' # for danBERT save format
 
             true_labels_file = f'datasets/{dataset}/{test_valid}.parquet'
             predictions = load_predictions(predictions_file)
