@@ -19,19 +19,19 @@ PATHS = {
     # "pi_class": [
     #     {"parquet": "datasets/pi_deepset/test.parquet", "csv_paths": ["danbert_model/test_preds/pi_deepset_danbert.csv", "dansn_model/test_preds/pi_deepset_dansn.csv"]}
     # ],
-    # "pi_detect": [
-    #     {"parquet": "datasets/pi_hackaprompt/test.parquet", "csv_paths": ["danbert_model/test_preds/pi_hackaprompt_danbert.csv", "dansn_model/test_preds/pi_hackaprompt_dansn.csv"]}
-    # ],
+    "pi_detect": [
+        {"parquet": "datasets/pi_hackaprompt/test.parquet", "csv_paths": ["danbert_model/test_preds/pi_hackaprompt_danbert.csv", "dansn_model/test_preds/pi_hackaprompt_dansn.csv"]}
+    ]#,
     # "jailbreak": [
     #     {"parquet": "datasets/dan_jailbreak/test.parquet", "csv_paths": ["danbert_model/test_preds/dan_jailbreak_danbert.csv", "dansn_model/test_preds/dan_jailbreak_dansn.csv"]}#,
     #     # {"parquet": "datasets/protectai_jailbreak/test.parquet", "csv_paths": ["danbert_model/test_preds/protectai_jailbreak_danbert.csv", "dansn_model/test_preds/protectai_jailbreak_dansn.csv"]}
     # ],
-    "password": [
-        # {"parquet": "datasets/lakera_ignore/test.parquet", "csv_paths": ["danbert_model/test_preds/lakera_ignore_danbert.csv", "dansn_model/test_preds/lakera_ignore_dansn.csv"]},
-        # {"parquet": "datasets/lakera_summ/test.parquet", "csv_paths": ["danbert_model/test_preds/lakera_summ_danbert.csv", "dansn_model/test_preds/lakera_summ_dansn.csv"]},
-        # {"parquet": "datasets/lakera_mosscap/test.parquet", "csv_paths": ["danbert_model/test_preds/lakera_mosscap_danbert.csv", "dansn_model/test_preds/lakera_mosscap_dansn.csv"]},
-        {"parquet": "datasets/tensortrust_extraction/test.parquet", "csv_paths": ["danbert_model/test_preds/tensortrust_extraction_danbert.csv", "dansn_model/test_preds/tensortrust_extraction_dansn.csv"]}
-    ]
+    # "password": [
+    #     # {"parquet": "datasets/lakera_ignore/test.parquet", "csv_paths": ["danbert_model/test_preds/lakera_ignore_danbert.csv", "dansn_model/test_preds/lakera_ignore_dansn.csv"]},
+    #     # {"parquet": "datasets/lakera_summ/test.parquet", "csv_paths": ["danbert_model/test_preds/lakera_summ_danbert.csv", "dansn_model/test_preds/lakera_summ_dansn.csv"]},
+    #     # {"parquet": "datasets/lakera_mosscap/test.parquet", "csv_paths": ["danbert_model/test_preds/lakera_mosscap_danbert.csv", "dansn_model/test_preds/lakera_mosscap_dansn.csv"]},
+    #     {"parquet": "datasets/tensortrust_extraction/test.parquet", "csv_paths": ["danbert_model/test_preds/tensortrust_extraction_danbert.csv", "dansn_model/test_preds/tensortrust_extraction_dansn.csv"]}
+    # ]
 }
 
 dataset_cats = {
@@ -115,7 +115,7 @@ def average_expert_probability(expert_evaluations, weights):
 
 def classify_entries(datasets, weights):
     results = {}
-    timeout = 600
+    timeout = 1800
 
     for category, dataset_info in datasets.items():
         category_results = []
@@ -134,7 +134,7 @@ def classify_entries(datasets, weights):
                 predictions.append(prediction)
 
             predictions_df = pd.DataFrame(predictions, columns=['prediction'])
-            predictions_df.to_csv(f'results/recollection/{category}.csv', index=False)
+            predictions_df.to_csv(f'results/recollection/pi_hackaprompt.csv', index=False)
             category_results.append(predictions_df)
         
         pprint(predictions)
