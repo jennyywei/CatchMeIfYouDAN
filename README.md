@@ -4,6 +4,9 @@ Alice Guo, Grace Jin, Jenny Wei
 
 Stanford CS224N (Natural Language Processing with Deep Learning), Spring 2024
 
+## FINAL REPORT
+[CS224N__Final_Report.pdf](https://github.com/user-attachments/files/16593409/CS224N__Final_Report.pdf)
+
 ## DATASETS + SETUP
 
 ### Datasets
